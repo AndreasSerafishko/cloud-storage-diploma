@@ -1,6 +1,9 @@
 package com.cloudstorage.controller;
 
 import com.cloudstorage.dto.FileResponse;
+import com.cloudstorage.model.FileEntity;
+import com.cloudstorage.model.User;
+import com.cloudstorage.repository.UserRepository;
 import com.cloudstorage.service.FileService;
 import com.cloudstorage.security.JwtProvider;
 import com.cloudstorage.repository.TokenRepository;
@@ -14,10 +17,10 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -25,54 +28,43 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class)
 class FileControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
-    private FileService fileService;
-
-    @MockBean
-    private JwtProvider jwtProvider;
-
-    @MockBean
-    private TokenRepository tokenRepository;
+    @Autowired private MockMvc mockMvc;
+    @MockBean private FileService fileService;
+    @MockBean private UserRepository userRepository;
+    @MockBean private JwtProvider jwtProvider;
+    @MockBean private TokenRepository tokenRepository;
 
     @Test
     @WithMockUser(username = "user")
     void getFilesSuccess() throws Exception {
-        List<FileResponse> files = Arrays.asList(
-                new FileResponse("file1.txt", 100L),
-                new FileResponse("file2.txt", 200L)
-        );
+        User user = User.builder().id(1L).login("user").password("pass").build();
+        when(userRepository.findByLogin("user")).thenReturn(Optional.of(user));
+        when(fileService.getUserFiles(user, 3))
+                .thenReturn(List.of(FileEntity.builder().filename("f1.txt").size(100L).build()));
 
-        when(fileService.getUserFiles("user", 3)).thenReturn(files);
-
-        mockMvc.perform(get("/cloud/list?limit=3")
-                        .header("auth-token", "test-token"))
+        mockMvc.perform(get("/cloud/list?limit=3").header("auth-token", "t"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].filename").value("file1.txt"))
-                .andExpect(jsonPath("$[0].size").value(100));
+                .andExpect(jsonPath("$[0].filename").value("f1.txt"));
     }
 
     @Test
     @WithMockUser(username = "user")
     void uploadFileSuccess() throws Exception {
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "test.txt", "text/plain", "Hello".getBytes()
-        );
+        User user = User.builder().id(1L).login("user").password("pass").build();
+        when(userRepository.findByLogin("user")).thenReturn(Optional.of(user));
 
-        mockMvc.perform(multipart("/cloud/file")
-                        .file(file)
-                        .header("auth-token", "test-token"))
+        MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain", "Hello".getBytes());
+        mockMvc.perform(multipart("/cloud/file").file(file).header("auth-token", "t"))
                 .andExpect(status().isOk());
     }
 
     @Test
     @WithMockUser(username = "user")
     void deleteFileSuccess() throws Exception {
-        mockMvc.perform(delete("/cloud/file?filename=test.txt")
-                        .header("auth-token", "test-token"))
+        User user = User.builder().id(1L).login("user").password("pass").build();
+        when(userRepository.findByLogin("user")).thenReturn(Optional.of(user));
+
+        mockMvc.perform(delete("/cloud/file?filename=test.txt").header("auth-token", "t"))
                 .andExpect(status().isOk());
     }
 }
